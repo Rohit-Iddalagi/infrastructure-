@@ -8,36 +8,36 @@ pipeline {
     stage('Checkout') { steps { checkout scm } }
     stage('Terraform Init') {
       steps {
-        sh 'terraform -chdir=Infrastructure/terraform/environments/prod init'
+        sh 'terraform -chdir=terraform/environments/prod init'
       }
     }
     stage('Terraform Validate') {
       steps {
-        sh 'terraform -chdir=Infrastructure/terraform/environments/prod validate'
+        sh 'terraform -chdir=terraform/environments/prod validate'
       }
     }
     stage('Checkov Scan') {
       steps {
         sh '''
           if command -v checkov >/dev/null 2>&1; then
-            checkov -d Infrastructure/terraform/environments/prod --framework terraform
+            checkov -d terraform/environments/prod --framework terraform
           else
             docker run --rm -v "$PWD:/tf" bridgecrew/checkov:latest \
-              -d /tf/Infrastructure/terraform/environments/prod --framework terraform
+              -d /tf/terraform/environments/prod --framework terraform
           fi
         '''
       }
     }
     stage('Terraform Plan') {
       steps {
-        sh 'terraform -chdir=Infrastructure/terraform/environments/prod plan -out=tfplan'
+        sh 'terraform -chdir=terraform/environments/prod plan -out=tfplan'
       }
     }
     stage('Terraform Apply') {
       when { branch 'main' }
       steps {
         input 'Approve production deployment?'
-        sh 'terraform -chdir=Infrastructure/terraform/environments/prod apply -auto-approve tfplan'
+        sh 'terraform -chdir=terraform/environments/prod apply -auto-approve tfplan'
       }
     }
   }
