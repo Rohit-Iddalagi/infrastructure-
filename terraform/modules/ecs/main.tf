@@ -132,7 +132,7 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 data "aws_ecs_cluster" "main" {
-  name = "${var.app_name}-${var.environment}-cluster"
+  cluster_name = "${var.app_name}-${var.environment}-cluster"
 }
 
 data "aws_region" "current" {}
