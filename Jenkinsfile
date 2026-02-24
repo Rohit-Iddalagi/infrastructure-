@@ -1,74 +1,144 @@
 pipeline {
   agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+  }
+
+  triggers {
+    githubPush()
+  }
+
   parameters {
-    choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Select apply or destroy')
+    string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region')
+    string(name: 'TF_ENV', defaultValue: 'prod', description: 'Terraform environment directory under terraform/environments/')
+    booleanParam(name: 'AUTO_APPLY', defaultValue: false, description: 'Auto apply terraform changes on main branch')
+    string(name: 'SONAR_PROJECT_KEY', defaultValue: 'hospital-infrastructure', description: 'SonarQube project key')
+    string(name: 'SONAR_PROJECT_NAME', defaultValue: 'hospital-infrastructure', description: 'SonarQube project name')
   }
+
   environment {
-    TF_VERSION = '1.6.0'
-    AWS_REGION = 'us-east-1'
+    TF_DIR = "terraform/environments/${params.TF_ENV}"
   }
+
   stages {
-    stage('Checkout') { steps { checkout scm } }
-    stage('Terraform Init') {
+    stage('Checkout') {
       steps {
-        sh 'terraform -chdir=terraform/environments/prod init'
+        checkout scm
+        sh 'mkdir -p reports'
       }
     }
-    stage('Terraform Validate') {
+
+    stage('SonarQube Scan') {
       steps {
-        sh 'terraform -chdir=terraform/environments/prod validate'
+        withSonarQubeEnv('sonarqube') {
+          sh '''
+            sonar-scanner \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+              -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+              -Dsonar.sources=terraform
+          '''
+        }
       }
     }
-    stage('Checkov Scan') {
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 10, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+
+    stage('Checkov') {
       steps {
         sh '''
-          if command -v checkov >/dev/null 2>&1; then
-            checkov -d terraform/environments/prod --framework terraform --soft-fail
-          else
-            docker run --rm -v "$PWD:/tf" bridgecrew/checkov:latest \
-              -d /tf/terraform/environments/prod --framework terraform --soft-fail
-          fi
+          checkov -d terraform --framework terraform,secrets --quiet \
+            | tee reports/checkov.txt
         '''
       }
     }
-    stage('Terraform Plan') {
+
+    stage('Trivy IaC Scan') {
       steps {
-        sh 'terraform -chdir=terraform/environments/prod plan -out=tfplan'
+        sh '''
+          trivy config terraform \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --output reports/trivy-config.txt
+        '''
       }
     }
+
+    stage('Terraform Init') {
+      when {
+        branch 'main'
+      }
+      steps {
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: 'aws-jenkins'
+        ]]) {
+          dir("${TF_DIR}") {
+            sh 'terraform init -input=false'
+          }
+        }
+      }
+    }
+
+    stage('Terraform Validate') {
+      when {
+        branch 'main'
+      }
+      steps {
+        dir("${TF_DIR}") {
+          sh 'terraform validate'
+        }
+      }
+    }
+
+    stage('Terraform Plan') {
+      when {
+        branch 'main'
+      }
+      steps {
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: 'aws-jenkins'
+        ]]) {
+          dir("${TF_DIR}") {
+            sh 'terraform plan -out=tfplan -input=false'
+          }
+        }
+      }
+    }
+
     stage('Terraform Apply') {
       when {
-        expression { params.ACTION == 'apply' }
-      }
-      steps {
-        input 'Approve production deployment?'
-        script {
-          env.TF_APPLY_RAN = 'true'
+        allOf {
+          branch 'main'
+          expression { return params.AUTO_APPLY == true }
         }
-        sh 'terraform -chdir=terraform/environments/prod apply -auto-approve tfplan'
-      }
-    }
-    stage('Force Destroy (Manual)') {
-      when {
-        expression { params.ACTION == 'destroy' }
       }
       steps {
-        input 'Force destroy ALL infrastructure?'
-        sh 'terraform -chdir=terraform/environments/prod destroy -auto-approve -refresh=false -lock=false'
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: 'aws-jenkins'
+        ]]) {
+          dir("${TF_DIR}") {
+            sh 'terraform apply -input=false -auto-approve tfplan'
+          }
+        }
       }
     }
   }
+
   post {
-    failure {
-      script {
-        if (env.TF_APPLY_RAN == 'true') {
-          sh 'terraform -chdir=terraform/environments/prod destroy -auto-approve -refresh=false -lock=false'
-        }
-      }
+    always {
+      archiveArtifacts allowEmptyArchive: true, artifacts: 'reports/*,terraform/environments/**/tfplan'
       cleanWs()
     }
-    success { cleanWs() }
-    unstable { cleanWs() }
-    aborted { cleanWs() }
   }
 }
