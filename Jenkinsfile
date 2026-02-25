@@ -14,6 +14,7 @@ pipeline {
     string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region')
     string(name: 'TF_ENV', defaultValue: 'prod', description: 'Terraform environment directory under terraform/environments/')
     booleanParam(name: 'AUTO_APPLY', defaultValue: false, description: 'Auto apply terraform changes on main branch')
+    booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: true, description: 'Require manual approval before Terraform apply in prod')
     string(name: 'SONAR_PROJECT_KEY', defaultValue: 'hospital-infrastructure', description: 'SonarQube project key')
     string(name: 'SONAR_PROJECT_NAME', defaultValue: 'hospital-infrastructure', description: 'SonarQube project name')
   }
@@ -111,6 +112,22 @@ pipeline {
           dir("${TF_DIR}") {
             sh 'terraform plan -out=tfplan -input=false'
           }
+        }
+      }
+    }
+
+    stage('Manual Approval (Prod)') {
+      when {
+        allOf {
+          branch 'main'
+          expression { return params.AUTO_APPLY == true }
+          expression { return params.TF_ENV == 'prod' }
+          expression { return params.REQUIRE_MANUAL_APPROVAL == true }
+        }
+      }
+      steps {
+        timeout(time: 30, unit: 'MINUTES') {
+          input message: "Approve Terraform apply for ${params.TF_ENV.toUpperCase()}?"
         }
       }
     }
