@@ -37,19 +37,19 @@ variable "public_subnet_cidrs" {
 variable "existing_vpc_id" {
   description = "(Optional) Use an existing VPC by specifying its ID. Leave empty to create a new VPC."
   type        = string
-  default     = "vpc-04c43f1e3f46e50f5"
+  default     = ""
 }
 
 variable "public_subnet_ids" {
   description = "(Optional) List of existing public subnet IDs to use (in AZ order)"
   type        = list(string)
-  default     = ["subnet-0ee8dd7c02b75b349", "subnet-0bf538da9d3f0040c", "subnet-04f718ecdfe67f77a"]
+  default     = []
 }
 
 variable "private_subnet_ids" {
   description = "(Optional) List of existing private subnet IDs to use (in AZ order)"
   type        = list(string)
-  default     = ["subnet-0af4ff257380caf3f", "subnet-0e04c326304dad454", "subnet-07c3eadb68cb75f7f"]
+  default     = []
 }
 
 variable "ecs_task_cpu" {
@@ -79,19 +79,19 @@ variable "db_engine_version" {
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.small"
+  default     = "db.t3.micro"
 }
 
 variable "db_allocated_storage" {
   description = "RDS allocated storage (GB)"
   type        = number
-  default     = 100
+  default     = 20
 }
 
 variable "db_backup_retention_period" {
   description = "RDS backup retention period (days)"
   type        = number
-  default     = 30
+  default     = 1
 }
 
 variable "enable_monitoring" {
@@ -103,5 +103,5 @@ variable "enable_monitoring" {
 variable "shared_execution_role_arn" {
   description = "Shared IAM role ARN used for ECS task execution and task role"
   type        = string
-  default     = "arn:aws:iam::147997138755:role/jenkins-cicd-role"
+  default     = ""
 }

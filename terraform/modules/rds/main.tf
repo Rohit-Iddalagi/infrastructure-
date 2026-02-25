@@ -14,7 +14,7 @@ resource "aws_db_instance" "mysql" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az                  = var.environment == "prod" ? true : false
+  multi_az                  = false
   storage_encrypted         = true
   skip_final_snapshot       = var.environment == "dev" ? true : false
   final_snapshot_identifier = var.environment == "prod" ? "${var.app_name}-${var.environment}-final-snapshot" : null
@@ -27,8 +27,9 @@ resource "aws_db_instance" "mysql" {
 }
 
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%^&*()-_=+[]{}:;,.?"
 }
 
 resource "aws_secretsmanager_secret" "db_password" {

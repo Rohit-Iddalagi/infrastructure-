@@ -116,6 +116,33 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  count = var.execution_role_arn != null && var.execution_role_arn != "" ? 0 : 1
+  name  = "${var.service_name}-execution-secrets-policy"
+  role  = aws_iam_role.ecs_task_execution[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowGetAppSecrets"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.app_name}/${var.environment}/*"
+      },
+      {
+        Sid      = "AllowKmsDecryptForSecrets"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "ecs_task" {
   count = var.task_role_arn != null && var.task_role_arn != "" ? 0 : 1
   name  = "${var.service_name}-task-role"
@@ -137,3 +164,5 @@ data "aws_ecs_cluster" "main" {
 }
 
 data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}

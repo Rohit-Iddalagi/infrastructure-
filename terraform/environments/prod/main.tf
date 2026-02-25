@@ -19,10 +19,7 @@ module "ecr" {
   repository_names = [
     "patientservice",
     "appointmentservice",
-    "patientportal",
-    "snapshot/patientservice",
-    "snapshot/appointmentservice",
-    "snapshot/patientportal"
+    "patientportal"
   ]
 }
 

@@ -14,7 +14,6 @@ Infrastructure-as-code for deploying core services on AWS using Terraform.
 
 ```text
 Infrastructure/
-  Jenkinsfile
   terraform/
     environments/
       dev/
@@ -44,9 +43,9 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-## Jenkins
+## CI/CD
 
-`Infrastructure/Jenkinsfile` runs:
+Use your repository CI/CD workflow to run:
 
 1. `terraform init`
 2. `terraform validate`
